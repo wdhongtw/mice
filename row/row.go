@@ -1,6 +1,7 @@
 package row
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -68,6 +69,43 @@ func (r *Row[T]) Items() <-chan T {
 		out <- r.items[idx]
 	}
 	close(out)
+	return out
+}
+
+// Takes returns a channel of items in the Row container.
+//
+// Caller MUST cancel the context to avoid resource leak.
+// This interface require additional routine when used, but unlike Items and ToSlice,
+// the size of allocated memory won't grows linearly with the total item count,
+// and can run faster.
+//
+// Consider use this interface when there are lots of items.
+func (r *Row[T]) Takes(ctx context.Context) <-chan T {
+	size := len(r.items)
+	out := make(chan T)
+	go func() {
+		defer close(out)
+		for idx, count := r.pivot, 0; count < size; idx, count = ((idx + 1) % size), count+1 {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			out <- r.items[idx]
+		}
+	}()
+	return out
+}
+
+// ToSlice just like Items but returns items in slice.
+//
+// This would be the fastest interface if the length of items is expected to be short.
+func (r *Row[T]) ToSlice() []T {
+	size := len(r.items)
+	out := make([]T, size)
+	for idx, count := r.pivot, 0; count < size; idx, count = ((idx + 1) % size), count+1 {
+		out[count] = r.items[idx]
+	}
 	return out
 }
 

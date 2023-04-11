@@ -54,6 +54,18 @@ func TestRow(t *testing.T) {
 			t.Fatalf("result is not expected, got %+v", result)
 		}
 	})
+	t.Run("RotateWorksFine", func(t *testing.T) {
+		row := FromSlice([]int{1, 2, 3}, WithInterval[int](0*time.Second))
+
+		row.Rotate()
+		row.Rotate()
+		row.Rotate()
+
+		result := asSlice(row.Items())
+		if !reflect.DeepEqual([]int{1, 2, 3}, result) {
+			t.Fatalf("result is not expected, got %+v", result)
+		}
+	})
 	t.Run("PointerTypeIsFine", func(t *testing.T) {
 		name := "alice"
 		row := FromSlice([]*string{&name})

@@ -21,11 +21,19 @@ type OptFunc[T any] func(row *Row[T])
 // WithInterval set the liminal interval between two effective rotation.
 //
 // Default to 100 millisecond.
+// Zero interval means there is no limit.
+// Panics on negative value.
 func WithInterval[T any](value time.Duration) OptFunc[T] {
 	return func(row *Row[T]) {
-		row.limiter = rate.Sometimes{
-			Interval: value,
+		var limiter rate.Sometimes
+		limiter = rate.Sometimes{Interval: value}
+		if value < 0 {
+			panic("got negative interval value")
 		}
+		if value == 0 {
+			limiter = rate.Sometimes{Every: 1}
+		}
+		row.limiter = limiter
 	}
 }
 

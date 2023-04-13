@@ -1,6 +1,7 @@
 package row
 
 import (
+	"context"
 	"reflect"
 	"sync"
 	"testing"
@@ -66,6 +67,27 @@ func TestRow(t *testing.T) {
 			t.Fatalf("result is not expected, got %+v", result)
 		}
 	})
+	t.Run("ToSliceWorksFine", func(t *testing.T) {
+		row := FromSlice([]int{1, 2, 3}, WithInterval[int](0*time.Second))
+
+		row.Rotate()
+		row.Rotate()
+
+		result := row.ToSlice()
+		if !reflect.DeepEqual([]int{3, 1, 2}, result) {
+			t.Fatalf("result is not expected, got %+v", result)
+		}
+	})
+	t.Run("TakesAlsoWorksFine", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		row := FromSlice([]int{1, 2, 3}, WithInterval[int](0*time.Second))
+
+		result := asSlice(row.Takes(ctx))
+		if !reflect.DeepEqual([]int{1, 2, 3}, result) {
+			t.Fatalf("result is not expected, got %+v", result)
+		}
+	})
 	t.Run("PointerTypeIsFine", func(t *testing.T) {
 		name := "alice"
 		row := FromSlice([]*string{&name})
@@ -73,6 +95,71 @@ func TestRow(t *testing.T) {
 		result := asSlice(row.Items())
 		if result[0] != &name {
 			t.Fatalf("result is not expected, got %+v", result)
+		}
+	})
+}
+
+func BenchmarkRowShort(b *testing.B) {
+	type empty struct{}
+
+	items := []*empty{&(empty{}), &(empty{})}
+	row := FromSlice(items)
+	b.Run("TestItemsPointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			<-row.Items()
+		}
+	})
+	b.Run("TestTakesPointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			go func() {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				<-row.Takes(ctx)
+			}()
+		}
+	})
+	b.Run("TestToSlicePointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			_ = row.ToSlice()[0]
+		}
+	})
+	b.Run("TestRawPointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			_ = items[0]
+		}
+	})
+}
+
+func BenchmarkRowLong(b *testing.B) {
+	type empty struct{}
+
+	items := []*empty{}
+	for idx := 0; idx < 0x400; idx++ {
+		items = append(items, &empty{})
+	}
+	row := FromSlice(items)
+	b.Run("TestItemsPointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			<-row.Items()
+		}
+	})
+	b.Run("TestTakesPointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			go func() {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				<-row.Takes(ctx)
+			}()
+		}
+	})
+	b.Run("TestToSlicePointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			_ = row.ToSlice()[0]
+		}
+	})
+	b.Run("TestRawPointerFirst", func(b *testing.B) {
+		for idx := 0; idx < b.N; idx++ {
+			_ = items[0]
 		}
 	})
 }
